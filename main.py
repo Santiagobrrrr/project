@@ -53,3 +53,14 @@ def saveUserDynamoDB(session, user):
         print("\nError al registrarse", e)
 
 saveUserDynamoDB(awsSession, user_data)
+
+def saveUserDynamoDB(session, stock):
+    try:
+        dynamodb = session.resource('dynamodb')
+        table = dynamodb.Table('stocks')  
+        table.put_item(Item=stock)
+        print("\nRegistrado correctamente.")
+    except Exception as e:
+        print("\nError al registrarse", e)
+
+saveUserDynamoDB(awsSession, user_data)

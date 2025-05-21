@@ -20,9 +20,6 @@ name = input("Ingrese su nombre: ")
 email = input("Ingrese su correo electrónico: ")
 initialBalance = float(input("Ingrese su saldo inicial: $"))
 
-print("\nRegistrando usuario...")
-time.sleep(1.5)
-
 userId = str(uuid.uuid4())
 
 print("\nRegistro exitoso!")
@@ -62,5 +59,3 @@ def saveUserDynamoDB(session, stock):
         print("\nRegistrado correctamente.")
     except Exception as e:
         print("\nError al registrarse", e)
-
-saveUserDynamoDB(awsSession, user_data)

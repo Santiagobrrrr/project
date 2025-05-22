@@ -15,7 +15,7 @@ url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={api_key}"
 
 # Registro de usuario
 print("\nBienvenido a tu sistema de inversiones\n")
-print("------------------------------------------\n")
+print("----------------------------------------------\n")
 
 name = input("Ingrese su nombre: ")
 email = input("Ingrese su correo electrónico: ")

@@ -1,171 +1,174 @@
 from dotenv import load_dotenv
-from decimal import Decimal
+from decimal import Decimal, getcontext
 from colorama import Fore, Style
-
 import os
 import uuid
 import requests
 import boto3
+from boto3.dynamodb.conditions import Key, Attr
+from datetime import datetime
 
-# Cargar API 
+# Cargar entorno
 load_dotenv()
-apiKey = os.getenv("API_KEY")
+API_KEY = os.getenv("API_KEY")
+AWS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET = os.getenv("AWS_SECRET_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
 
-if not apiKey:
-    print(f"{Fore.RED}Error: No se encontró una API Key válida. Verifica tu archivo .env.{Style.RESET_ALL}")
-    exit()
-
-# Configuraracion AWS
-awsAccessKey = os.getenv("AWS_ACCESS_KEY")
-awsSecretKey = os.getenv("AWS_SECRET_KEY")
-awsRegion = os.getenv("AWS_REGION")
-
-# inicio secion aws
-awsSession = boto3.Session(
-    aws_access_key_id=awsAccessKey,
-    aws_secret_access_key=awsSecretKey,
-    region_name=awsRegion
+# Conexión a AWS
+db = boto3.resource(
+    'dynamodb',
+    aws_access_key_id = AWS_KEY,
+    aws_secret_access_key = AWS_SECRET,
+    region_name = AWS_REGION
 )
+users_table = db.Table("users")
+stocks_table = db.Table("stocks")
 
-dynamoDb = awsSession.resource('dynamodb')
-stocksTable = dynamoDb.Table('stocks')
+symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
 
-# las empresas (si quieren pueden poner otras)
-symbolsList = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
-
-# precios de las acciones
-def getStockPrices(symbols):
-    stockData = {}
+# API conexión con JSON TwelveData
+def get_prices():
+    prices = {}
     for symbol in symbols:
-        url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={apiKey}"
-        response = requests.get(url)
-        
-        if response.status_code == 200:
-            price = response.json().get("price")
-            if price:
-                stockData[symbol] = Decimal(price)
-            else:
-                stockData[symbol] = None
-        else:
-            stockData[symbol] = None
+        resp = requests.get(
+            f"https://api.twelvedata.com/price?symbol={symbol}&apikey={API_KEY}"
+        )
+        price_json = resp.json().get("price") if resp.status_code == 200 else None
+        prices[symbol] = Decimal(price_json) if price_json else None
+    return prices
+
+menu_opt = ""
+while menu_opt != "5":
+    print(f"{Fore.YELLOW}-----------------------------------------------------{Style.RESET_ALL}")
+    print(f"{Fore.MAGENTA}        Bienvenido al sistema de inversiones{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}-----------------------------------------------------{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}1- Ver acciones{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}2- Invertir{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}3- Ver portafolio{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}4- Registrar usuario{Style.RESET_ALL}")
+    print(f"{Fore.RED}5- Salir{Style.RESET_ALL}")
+    menu_opt = input(f"{Fore.GREEN}\nSeleccione una opción: {Style.RESET_ALL}")
     
-    return stockData
+    # Ver acciones 
+    if menu_opt == "1":
+        # Muestra acciones en tiempo real
+        prices = get_prices()
+        print("\nPrecios actuales:")
+        for s, p in prices.items():
+            print(f"{s}: ${p:.2f}" if p else f"{s}: No disponible")
 
-# Registro de usuario
-print(f"{Fore.MAGENTA}\nBienvenido a tu sistema de inversiones{Style.RESET_ALL}")
-print(f"-----------------------------------------------------")
-
-userName = input(f"{Fore.BLUE}Ingrese su nombre:{Style.RESET_ALL} ")
-userEmail = input(f"{Fore.GREEN}Ingrese su correo electrónico:{Style.RESET_ALL} ")
-
-# saldo en nums
-while True:
-    try:
-        initialBalance = Decimal(input(f"{Fore.RED}Ingrese su saldo inicial {Fore.RED}(solo números :D):{Style.RESET_ALL} $"))
-        break  
-    except ValueError:
-        print(f"{Fore.RED}Error: Solo se pueden ingresar números. Inténtelo de nuevo.{Style.RESET_ALL}")
-
-userId = str(uuid.uuid4())
-
-# Info de registro
-print(f"{Fore.GREEN}\nRegistro exitoso!{Style.RESET_ALL}")
-print(f"{Fore.YELLOW}Nombre:{Style.RESET_ALL} {userName}")
-print(f"{Fore.GREEN}Correo Electrónico:{Style.RESET_ALL} {userEmail}")
-print(f"{Fore.CYAN}Saldo inicial:{Style.RESET_ALL} ${initialBalance:.2f}")
-print(f"{Fore.MAGENTA}UUID:{Style.RESET_ALL} {userId}")
-
-# Guardar información inicial en DynamoDB
-userData = {
-    "userId": userId,
-    "userName": userName,
-    "email": userEmail,  
-    "balance": initialBalance,
-    "investments": {}
-}
-
-def saveToDynamoDb(data):
-    try:
-        stocksTable.put_item(Item=data)
-        print("\nDatos guardados correctamente en DynamoDB.")
-    except Exception as error:
-        print("\nError al guardar datos en DynamoDB:", error)
-
-saveToDynamoDb(userData)
-
-# sistema de inversion
-totalSpent = Decimal("0")
-
-while True:
-    # Mostrar precios de empresas (si quiere seguir inviertiendo)
-    stockPrices = getStockPrices(symbolsList)
-    print("\nPrecios actuales de empresas:")
-    for symbol, price in stockPrices.items():
-        if price:
-            print(f"{Fore.YELLOW}{symbol}:{Style.RESET_ALL} ${price:.2f}")
-        else:
-            print(f"{Fore.YELLOW}{symbol}:{Style.RESET_ALL} Error al obtener precio")
-    print(f"{Fore.GREEN}Saldo restante: ${initialBalance:.2f}{Style.RESET_ALL}")
-
-    #seleccionar otra empresa
-    print(f"\n{Fore.CYAN}Seleccione la empresa donde desea invertir (o 'salir' para terminar):{Style.RESET_ALL}")
-    selectedSymbol = input("Empresa: ").upper()
-
-    if selectedSymbol == "SALIR":
-        break
-    if selectedSymbol not in stockPrices or stockPrices[selectedSymbol] is None:
-        print(f"{Fore.RED}Símbolo inválido o error en la cotización.{Style.RESET_ALL}")
-        continue
-
-    # precio de la acción
-    pricePerShare = stockPrices[selectedSymbol]
-
-    try:
-        #numero de acciones a comprar
-        sharesCount = int(input(f"{Fore.MAGENTA}Ingrese cuántas veces quiere invertir en {selectedSymbol} (cada inversión equivale al precio de una acción):{Style.RESET_ALL} "))
-
-        # Calcular costo total
-        totalCost = sharesCount * pricePerShare
-
-        if totalCost > initialBalance:
-            print(f"{Fore.RED}Fondos insuficientes para comprar {sharesCount} acciones de {selectedSymbol}.{Style.RESET_ALL}")
+    # Invertir
+    elif menu_opt == "2":
+        # Inicio de sesión de correo 
+        email = input("Correo: ")
+        user_resp = users_table.get_item(Key={"email": email})
+        user = user_resp.get("Item")
+        if not user:
+            print("Correo no encontrado.")
             continue
-
-        # Registrar inversión
-        if selectedSymbol in userData["investments"]:
-            userData["investments"][selectedSymbol] += sharesCount
+        print(f"Hola, {user['name']}")
+        # Mostrar acciones
+        prices = get_prices()
+        print("Empresas disponibles:")
+        for s in symbols:
+            print(f"{s}: ${prices[s]:.2f}" if prices[s] else f"{s}: N/A")
+        sym = input("Seleccione símbolo: ").upper()
+        price = prices.get(sym)
+        if not price:
+            print("Símbolo inválido o sin precio.")
+            continue
+        # Total a invertir
+        amt = Decimal(input("Monto a invertir: $"))
+        if amt > user['balance']:
+            print("Fondos insuficientes.")
+            continue
+        # Calcular acciones
+        shares = amt / price
+        # Actualizar saldo
+        new_balance = user['balance'] - amt
+        users_table.update_item(
+            Key={"email": email},
+            UpdateExpression="SET balance = :b",
+            ExpressionAttributeValues={":b": new_balance}
+        )
+        # Registrar o acumular inversión usando scan
+        scan_resp = stocks_table.scan(
+            FilterExpression=Attr("email").eq(email) & Attr("symbol").eq(sym)
+        )
+        items = scan_resp.get('Items', [])
+        now = datetime.utcnow().isoformat()
+        if items:
+            inv = items[0]
+            prev_shares = Decimal(inv.get('shares', '0'))
+            prev_price = Decimal(inv.get('price_per_share', '0'))
+            total_shares = prev_shares + shares
+            avg_price = ((prev_price * prev_shares) + (price * shares)) / total_shares
+            stocks_table.put_item(Item={
+                "email": email,
+                "symbol": sym,
+                "shares": str(total_shares),
+                "price_per_share": str(avg_price),
+                "timestamp": now
+            })
         else:
-            userData["investments"][selectedSymbol] = sharesCount
+            stocks_table.put_item(Item={
+                "email": email,
+                "symbol": sym,
+                "shares": str(shares),
+                "price_per_share": str(price),
+                "timestamp": now
+            })
+        print("Inversión registrada con éxito.")
 
-        # Actualizar saldo y gasto total
-        initialBalance -= totalCost
-        totalSpent += totalCost
-        userData["balance"] = initialBalance
+    # Ver portafolio
+    elif menu_opt == "3":
+        email = input("Correo: ")
+        user_resp = users_table.get_item(Key={"email": email})
+        user = user_resp.get("Item")
+        if not user:
+            print("Correo no encontrado.")
+            continue
+        print(f"Usuario: {user['name']}")
+        print(f"Saldo disponible: ${user['balance']:.2f}")
+        # Obtener todas inversiones con scan
+        inv_resp = stocks_table.scan(
+            FilterExpression=Attr("email").eq(email)
+        )
+        invs = inv_resp.get('Items', [])
+        if not invs:
+            print("No hay inversiones registradas.")
+            continue
+        prices = get_prices()
+        total_gain = Decimal('0')
+        print("\nHistorial de inversiones:")
+        for it in invs:
+            sym = it['symbol']
+            shares = Decimal(it.get('shares', '0'))
+            bought_price = Decimal(it.get('price_per_share', '0'))
+            current_price = prices.get(sym) or Decimal('0')
+            invested = shares * bought_price
+            current_value = shares * current_price
+            gain = current_value - invested
+            total_gain += gain
+            price_disp = f"${current_price:.2f}" if prices.get(sym) else "N/A"
+            print(f"- {sym}: inv ${invested:.2f} a ${bought_price:.2f}, act {price_disp}, G/P ${gain:.2f}")
+        print(f"Ganancia/Pérdida total acumulada: ${total_gain:.2f}")
 
-        print(f"{Fore.GREEN}Compra exitosa! Adquiriste {sharesCount} acciones de {selectedSymbol}.{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}Saldo restante: ${initialBalance:.2f}{Style.RESET_ALL}")
+    # Registrar usuario
+    elif menu_opt == "4":
+        name = input("Nombre: ")
+        email = input("Correo: ")
+        bal = Decimal(input("Saldo inicial: $"))
+        users_table.put_item(Item={
+            "email": email,
+            "name": name,
+            "balance": bal,
+            "userId": str(uuid.uuid4())
+        })
+        print(f"{Fore.GREEN}Usuario registrado correctamente.{Style.RESET_ALL}")
 
-        # Guardar actualización en la tabla de DynamoDB
-        saveToDynamoDb(userData)
-
-    except ValueError:
-        print(f"{Fore.RED}Número inválido. Ingrese un valor entero válido.{Style.RESET_ALL}")
-
-# resumen total de la inversion
-print("\n--------------------------------------------")
-print(f"{Fore.YELLOW}RESUMEN DE INVERSIÓN:{Style.RESET_ALL}")
-print(f"{Fore.CYAN}Saldo restante: ${initialBalance:.2f}{Style.RESET_ALL}")
-print(f"{Fore.RED}Total invertido: ${totalSpent:.2f}{Style.RESET_ALL}")
-print(f"{Fore.MAGENTA}Inversiones realizadas:{Style.RESET_ALL}")
-
-for symbol, shares in userData["investments"].items():
-    pricePerShare = stockPrices[symbol]
-    cost = shares * pricePerShare
-    print(f"{Fore.YELLOW}- {symbol}:{Style.RESET_ALL} {shares} acciones (${cost:.2f})")
-    
-print("\nGracias por usar el sistema de inversiones. ¡Hasta la próxima!")
-print("--------------------------------------------")
-
-#no se q mas ponerle
-#ola
-#chejo.dlg en insta 
+    elif menu_opt == "5":
+        print("Salio del sistema, nos vemos.")
+    else:
+        print("Opción inválida.")

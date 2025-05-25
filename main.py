@@ -45,6 +45,7 @@ while menu_opt != "5":
     print(f"{Fore.RED}5- Salir{Style.RESET_ALL}")
     menu_opt = input(f"{Fore.GREEN}\nSeleccione una opción: {Style.RESET_ALL}")
     
+    
     # Ver acciones 
     if menu_opt == "1":
         # Muestra acciones en tiempo real

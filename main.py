@@ -159,17 +159,17 @@ while menu_opt != "5":
     elif menu_opt == "4":
         name = input("Nombre: ")
         email = input("Correo: ")
-        bal = Decimal(input("Saldo inicial: $"))
-        users_table.put_item(Item={
-            "email": email,
-            "name": name,
-            "balance": bal,
-            "userId": str(uuid.uuid4())
-        })
-        print(f"{Fore.GREEN}Usuario registrado correctamente.{Style.RESET_ALL}")
+       
+        while True: 
+            entrada = input("Saldo Inicial: $")
+            try:
+                bal = Decimal(entrada)
+                break
+            except:
+                print("Porfavor, ingrese un número válido (solo digitos).")
+        
 
     elif menu_opt == "5":
         print("Salio del sistema, nos vemos.")
     else:
         print("Opción inválida.")
-        

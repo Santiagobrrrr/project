@@ -167,7 +167,18 @@ while menu_opt != "5":
                 break
             except:
                 print("Porfavor, ingrese un número válido (solo digitos).")
-        
+        # Revisar si ya existe
+        existing = users_table.get_item(Key={"email": email})
+        if "Item" in existing:
+            print("Este correo ya está registrado.")
+            continue
+
+        users_table.put_item(Item={
+            "email": email,
+            "name": name,
+            "balance": bal,
+        })
+        print("Usuario registrado con éxito.")
 
     elif menu_opt == "5":
         print("Salio del sistema, nos vemos.")
